@@ -12,6 +12,10 @@ import { notify } from './components/Notification';
 import { TransactionProgress } from './components/TransactionProgress';
 import { NotificationHistory } from './components/NotificationHistory';
 import { getNotifications, clearNotifications, setNotificationChangeHandler } from './components/Notification';
+import type { SwapOffer } from './types/swap';
+import { SwapCreate } from './components/SwapCreate';
+import { SwapList } from './components/SwapList';
+import { SwapService } from './services/swapService';
 
 const peraWallet = new PeraWalletConnect({
   shouldShowSignTxnToast: false
@@ -117,6 +121,12 @@ const ASSET_METADATA = {
   }
 };
 
+// Add this after the NETWORKS constant
+const SWAP_APP_ID = {
+  MainNet: 12345, // Replace with your deployed contract ID
+  TestNet: 67890  // Replace with your deployed contract ID
+};
+
 function App() {
   const [walletState, setWalletState] = useState<WalletState>({
     address: null,
@@ -133,6 +143,11 @@ function App() {
   });
   const [notifications, setNotifications] = useState(getNotifications());
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [swapOffers, setSwapOffers] = useState<SwapOffer[]>([]);
+  const [swapService] = useState(() => new SwapService(
+    NETWORKS[walletState.network].algod,
+    SWAP_APP_ID[walletState.network]
+  ));
 
   useEffect(() => {
     // Reconnect session
@@ -150,6 +165,7 @@ function App() {
   useEffect(() => {
     if (walletState.isConnected) {
       fetchVerifiedAssets();
+      fetchSwapOffers();
     } else {
       setAssets([]); // Clear assets when disconnected
     }
@@ -187,6 +203,16 @@ function App() {
       setAssets([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSwapOffers = async () => {
+    try {
+      const offers = await swapService.getOffers();
+      setSwapOffers(offers);
+    } catch (error) {
+      console.error('Failed to fetch swap offers:', error);
+      notify.error('Failed to load swap offers');
     }
   };
 
@@ -323,6 +349,106 @@ function App() {
     }
   };
 
+  const createSwapOffer = async (offer: Omit<SwapOffer, 'id' | 'status' | 'createdAt'>) => {
+    if (!walletState.address) {
+      notify.warning('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      setTxProgress({
+        step: 1,
+        totalSteps: 4,
+        message: 'Preparing swap transaction...'
+      });
+
+      const algodClient = NETWORKS[walletState.network].algod;
+      const suggestedParams = await algodClient.getTransactionParams().do();
+
+      // Create escrow transaction
+      const escrowTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        from: walletState.address,
+        to: offer.creator,
+        assetIndex: offer.assetToSend.id,
+        amount: offer.assetToSend.amount,
+        suggestedParams,
+      });
+
+      setTxProgress({
+        step: 2,
+        totalSteps: 4,
+        message: 'Please sign the escrow transaction...'
+      });
+
+      const signedTxn = await peraWallet.signTransaction([[{ txn: escrowTxn }]]);
+      const { txId } = await algodClient.sendRawTransaction(signedTxn).do();
+
+      setTxProgress({
+        step: 3,
+        totalSteps: 4,
+        message: 'Submitting swap offer...'
+      });
+
+      // Create the offer in the service
+      const newOffer = await swapService.createOffer({
+        ...offer,
+        creator: walletState.address,
+      });
+
+      setTxProgress({
+        step: 4,
+        totalSteps: 4,
+        message: 'Finalizing swap offer...'
+      });
+
+      await algosdk.waitForConfirmation(algodClient, txId, 4);
+      notify.success('Swap offer created successfully!');
+      return newOffer;
+    } catch (error) {
+      console.error('Swap creation error:', error);
+      notify.error('Failed to create swap offer');
+      throw error;
+    } finally {
+      setTxProgress({
+        step: 0,
+        totalSteps: 4,
+        message: ''
+      });
+    }
+  };
+
+  const acceptSwapOffer = async (offerId: string) => {
+    if (!walletState.address) {
+      notify.warning('Please connect your wallet first');
+      return;
+    }
+
+    const offer = swapOffers.find(o => o.id === offerId);
+    if (!offer) {
+      throw new Error('Swap offer not found');
+    }
+
+    try {
+      await swapService.acceptOffer(walletState.address, offer);
+      await fetchSwapOffers(); // Refresh the list
+      notify.success('Swap completed successfully');
+    } catch (error) {
+      console.error('Failed to accept swap:', error);
+      notify.error('Failed to accept swap offer');
+    }
+  };
+
+  const handleCreateSwap = async (offer: Omit<SwapOffer, 'id' | 'status' | 'createdAt'>) => {
+    try {
+      await createSwapOffer(offer);
+      await fetchSwapOffers(); // Refresh the list
+      notify.success('Swap offer created successfully');
+    } catch (error) {
+      console.error('Failed to create swap:', error);
+      notify.error('Failed to create swap offer');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-white">
       <Toaster position="top-right" />
@@ -372,6 +498,18 @@ function App() {
               <DonationCard onDonate={handleDonation} network={walletState.network} />
             </div>
 
+            {/* Add Swap Section */}
+            <div className="space-y-8 mb-12">
+              <SwapCreate
+                assets={assets}
+                onCreateSwap={handleCreateSwap}
+              />
+              <SwapList
+                offers={swapOffers}
+                onAcceptSwap={acceptSwapOffer}
+              />
+            </div>
+
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-8">Verified Assets</h2>
               {loading ? (
@@ -408,7 +546,7 @@ function App() {
           </>
         ) : (
           <div className="text-center py-12">
-            <p className="text-gray-600">Connect your wallet to view verified assets.</p>
+            <p className="text-gray-600">Connect your wallet to view assets and create swaps.</p>
           </div>
         )}
       </main>
