@@ -35,26 +35,6 @@ const DONATION_ADDRESSES = {
   TestNet: 'YJ5EFJPM3TYIP23SOOJWVAUVMKBJVGIZCNNIIZO652ZUSSTMGVIGMLC5YM'
 };
 
-// Add these interfaces for Pera API responses
-interface PeraAsset {
-  asset_id: number;
-  name: string;
-  unit_name: string;
-  logo_url?: string;
-  total: number;
-  decimals: number;
-  creator: string;
-}
-
-interface PeraVerifiedAssetsResponse {
-  results: {
-    asset_id: number;
-    name: string;
-    unit_name: string;
-    logo_url?: string;
-  }[];
-}
-
 // Remove ASSET_METADATA and update ASSET_ICONS
 const ASSET_ICONS = {
   'USDC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png',
@@ -70,6 +50,28 @@ const ASSET_ICONS = {
   'GEMS': 'https://s2.coinmarketcap.com/static/img/coins/64x64/13753.png',
   'goBTC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png',
 } as const;
+
+// Fix the AccountInfo interface to match Algorand's response type
+interface AccountInfo {
+  amount: number;
+  'min-balance': number;
+  'amount-without-pending-rewards': number;
+  'pending-rewards': number;
+  'reward-base': number;
+  rewards: number;
+  round: number;
+  status: string;
+  'total-apps-opted-in': number;
+  'total-assets-opted-in': number;
+  'total-created-apps': number;
+  'total-created-assets': number;
+  assets: {
+    amount: number;
+    'asset-id': number;
+    creator: string;
+    'is-frozen': boolean;
+  }[];
+}
 
 function App() {
   const [walletState, setWalletState] = useState<WalletState>({
@@ -87,6 +89,7 @@ function App() {
   });
   const [notifications, setNotifications] = useState(getNotifications());
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [balance, setBalance] = useState<AccountInfo | null>(null);
 
   useEffect(() => {
     // Reconnect session
@@ -114,6 +117,14 @@ function App() {
       setNotifications([...newNotifications]);
     });
   }, []);
+
+  useEffect(() => {
+    if (walletState.isConnected && walletState.address) {
+      fetchBalance(walletState.address);
+    } else {
+      setBalance(null);
+    }
+  }, [walletState.isConnected, walletState.address, walletState.network]);
 
   const fetchVerifiedAssets = async () => {
     setLoading(true);
@@ -307,6 +318,18 @@ function App() {
     }
   };
 
+  // Update the fetchBalance function to properly type the response
+  const fetchBalance = async (address: string) => {
+    try {
+      const algodClient = NETWORKS[walletState.network].algod;
+      const accountInfo = await algodClient.accountInformation(address).do() as AccountInfo;
+      setBalance(accountInfo);
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      notify.error('Failed to fetch wallet balance');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-white">
       <Toaster position="top-right" />
@@ -322,6 +345,18 @@ function App() {
               </h1>
             </div>
             <div className="flex items-center gap-6">
+              {balance && (
+                <div className="px-4 py-2 bg-yellow-50 rounded-xl">
+                  <p className="text-sm font-medium text-yellow-900">
+                    {(balance['amount-without-pending-rewards'] / 1e6).toLocaleString()} ALGO
+                  </p>
+                  {balance['pending-rewards'] > 0 && (
+                    <p className="text-xs text-yellow-600">
+                      +{(balance['pending-rewards'] / 1e6).toLocaleString()} pending
+                    </p>
+                  )}
+                </div>
+              )}
               <NetworkSwitch
                 network={walletState.network}
                 onNetworkChange={(network) => setWalletState(prev => ({ ...prev, network }))}
