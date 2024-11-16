@@ -12,10 +12,6 @@ import { notify } from './components/Notification';
 import { TransactionProgress } from './components/TransactionProgress';
 import { NotificationHistory } from './components/NotificationHistory';
 import { getNotifications, clearNotifications, setNotificationChangeHandler } from './components/Notification';
-import type { SwapOffer } from './types/swap';
-import { SwapCreate } from './components/SwapCreate';
-import { SwapList } from './components/SwapList';
-import { SwapService } from './services/swapService';
 
 const peraWallet = new PeraWalletConnect({
   shouldShowSignTxnToast: false
@@ -33,99 +29,47 @@ const NETWORKS = {
   }
 };
 
-// Your wallet address for donations (use different addresses for different networks)
+// Your wallet address for donations
 const DONATION_ADDRESSES = {
   MainNet: 'YJ5EFJPM3TYIP23SOOJWVAUVMKBJVGIZCNNIIZO652ZUSSTMGVIGMLC5YM',
-  TestNet: 'YJ5EFJPM3TYIP23SOOJWVAUVMKBJVGIZCNNIIZO652ZUSSTMGVIGMLC5YM' // Replace with your testnet address
+  TestNet: 'YJ5EFJPM3TYIP23SOOJWVAUVMKBJVGIZCNNIIZO652ZUSSTMGVIGMLC5YM'
 };
 
-const VERIFIED_ASSETS = {
-  MainNet: [
-    31566704,  // USDC
-    312769,    // USDT
-    27165954,  // PLANET
-    226701642, // DEFLY
-    283820866, // XSOL
-    470842789, // ALGO/USDC
-    386192725  // goETH
-  ],
-  TestNet: [
-    10458941,  // USDC
-    10471299,  // PLANET
-    10458941,  // USDT
-    67396430,  // goETH
-    67396147   // TEST
-  ]
-};
+// Add these interfaces for Pera API responses
+interface PeraAsset {
+  asset_id: number;
+  name: string;
+  unit_name: string;
+  logo_url?: string;
+  total: number;
+  decimals: number;
+  creator: string;
+}
 
-// Add this constant near other constants
-const ASSET_METADATA = {
-  MainNet: {
-    31566704: {  // USDC
-      logo: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
-      name: "USDC",
-      unit_name: "USDC",
-    },
-    312769: {    // USDT
-      logo: "https://assets.coingecko.com/coins/images/325/small/Tether.png",
-      name: "Tether USDt",
-      unit_name: "USDt",
-    },
-    27165954: {  // PLANET
-      logo: "https://assets.coingecko.com/coins/images/24436/small/planetwatch.PNG",
-      name: "Planet",
-      unit_name: "PLANET",
-    },
-    226701642: { // DEFLY
-      logo: "https://assets.coingecko.com/coins/images/24437/small/defly.PNG",
-      name: "Defly Token",
-      unit_name: "DEFLY",
-    },
-    283820866: { // XSOL
-      logo: "https://assets.coingecko.com/coins/images/4128/small/solana.png",
-      name: "Wrapped SOL",
-      unit_name: "xSOL",
-    },
-    470842789: { // ALGO/USDC
-      logo: "https://assets.coingecko.com/coins/images/4380/small/download.png",
-      name: "Algo/USDC Pool",
-      unit_name: "TMPOOL1",
-    },
-    386192725: { // goETH
-      logo: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
-      name: "Governance ETH",
-      unit_name: "goETH",
-    }
-  },
-  TestNet: {
-    10458941: {  // USDC
-      logo: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
-      name: "USDC",
-      unit_name: "USDC",
-    },
-    10471299: {  // PLANET
-      logo: "https://assets.coingecko.com/coins/images/24436/small/planetwatch.PNG",
-      name: "Planet",
-      unit_name: "PLANET",
-    },
-    67396430: {  // goETH
-      logo: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
-      name: "Governance ETH",
-      unit_name: "goETH",
-    },
-    67396147: {  // TEST
-      logo: "https://assets.coingecko.com/coins/images/4380/small/download.png",
-      name: "Test Asset",
-      unit_name: "TEST",
-    }
-  }
-};
+interface PeraVerifiedAssetsResponse {
+  results: {
+    asset_id: number;
+    name: string;
+    unit_name: string;
+    logo_url?: string;
+  }[];
+}
 
-// Add this after the NETWORKS constant
-const SWAP_APP_ID = {
-  MainNet: 12345, // Replace with your deployed contract ID
-  TestNet: 67890  // Replace with your deployed contract ID
-};
+// Remove ASSET_METADATA and update ASSET_ICONS
+const ASSET_ICONS = {
+  'USDC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png',
+  'USDt': 'https://s2.coinmarketcap.com/static/img/coins/64x64/825.png',
+  'USDT': 'https://s2.coinmarketcap.com/static/img/coins/64x64/825.png',
+  'PLANET': 'https://s2.coinmarketcap.com/static/img/coins/64x64/10664.png',
+  'DEFLY': 'https://s2.coinmarketcap.com/static/img/coins/64x64/19133.png',
+  'XSOL': 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png',
+  'goETH': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png',
+  'ALGO': 'https://s2.coinmarketcap.com/static/img/coins/64x64/4030.png',
+  'OPUL': 'https://s2.coinmarketcap.com/static/img/coins/64x64/11955.png',
+  'GARD': 'https://s2.coinmarketcap.com/static/img/coins/64x64/9417.png',
+  'GEMS': 'https://s2.coinmarketcap.com/static/img/coins/64x64/13753.png',
+  'goBTC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png',
+} as const;
 
 function App() {
   const [walletState, setWalletState] = useState<WalletState>({
@@ -143,11 +87,6 @@ function App() {
   });
   const [notifications, setNotifications] = useState(getNotifications());
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [swapOffers, setSwapOffers] = useState<SwapOffer[]>([]);
-  const [swapService] = useState(() => new SwapService(
-    NETWORKS[walletState.network].algod,
-    SWAP_APP_ID[walletState.network]
-  ));
 
   useEffect(() => {
     // Reconnect session
@@ -160,16 +99,15 @@ function App() {
         }));
       }
     });
-  }, []); // Only run on mount
+  }, []);
 
   useEffect(() => {
     if (walletState.isConnected) {
       fetchVerifiedAssets();
-      fetchSwapOffers();
     } else {
-      setAssets([]); // Clear assets when disconnected
+      setAssets([]);
     }
-  }, [walletState.isConnected, walletState.network]); // Fetch when connection state or network changes
+  }, [walletState.isConnected, walletState.network]);
 
   useEffect(() => {
     setNotificationChangeHandler((newNotifications) => {
@@ -182,20 +120,50 @@ function App() {
     setError(null);
     try {
       const indexer = NETWORKS[walletState.network].indexer;
-      const verifiedAssetIds = VERIFIED_ASSETS[walletState.network];
-      const metadata = ASSET_METADATA[walletState.network];
+      
+      // Get popular ASAs
+      const popularAssetIds = [
+        31566704,  // USDC
+        312769,    // USDT
+        27165954,  // PLANET
+        226701642, // DEFLY
+        283820866, // XSOL
+        470842789, // ALGO/USDC
+        386192725  // goETH
+      ];
 
-      const assetPromises = verifiedAssetIds.map(async (assetId) => {
-        const assetInfo = await indexer.lookupAssetByID(assetId).do();
-        return {
-          ...assetInfo.asset,
-          ...metadata[assetId],
-          id: assetId,
-          verified: true
-        };
+      const assetPromises = popularAssetIds.map(async (assetId) => {
+        try {
+          const assetInfo = await indexer.lookupAssetByID(assetId).do();
+          const params = assetInfo.asset.params;
+          const unitName = params['unit-name'] || '';
+
+          // Get logo from our mapping
+          const logo = ASSET_ICONS[unitName as keyof typeof ASSET_ICONS] || '';
+
+          return {
+            id: assetId,
+            name: params.name || '',
+            unit_name: unitName,
+            verified: true,
+            logo,
+            total_supply: params.total,
+            decimals: params.decimals,
+            creator_address: params.creator
+          } as VerifiedAsset;
+        } catch (error) {
+          console.error(`Error fetching asset ${assetId}:`, error);
+          return null;
+        }
       });
 
-      const assetResults = await Promise.all(assetPromises);
+      const assetResults = (await Promise.all(assetPromises))
+        .filter((asset): asset is VerifiedAsset => 
+          asset !== null && 
+          asset.logo !== '' // Only include assets with logos
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
+
       setAssets(assetResults);
     } catch (error) {
       console.error('Asset fetch error:', error);
@@ -203,16 +171,6 @@ function App() {
       setAssets([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchSwapOffers = async () => {
-    try {
-      const offers = await swapService.getOffers();
-      setSwapOffers(offers);
-    } catch (error) {
-      console.error('Failed to fetch swap offers:', error);
-      notify.error('Failed to load swap offers');
     }
   };
 
@@ -349,106 +307,6 @@ function App() {
     }
   };
 
-  const createSwapOffer = async (offer: Omit<SwapOffer, 'id' | 'status' | 'createdAt'>) => {
-    if (!walletState.address) {
-      notify.warning('Please connect your wallet first');
-      return;
-    }
-
-    try {
-      setTxProgress({
-        step: 1,
-        totalSteps: 4,
-        message: 'Preparing swap transaction...'
-      });
-
-      const algodClient = NETWORKS[walletState.network].algod;
-      const suggestedParams = await algodClient.getTransactionParams().do();
-
-      // Create escrow transaction
-      const escrowTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        from: walletState.address,
-        to: offer.creator,
-        assetIndex: offer.assetToSend.id,
-        amount: offer.assetToSend.amount,
-        suggestedParams,
-      });
-
-      setTxProgress({
-        step: 2,
-        totalSteps: 4,
-        message: 'Please sign the escrow transaction...'
-      });
-
-      const signedTxn = await peraWallet.signTransaction([[{ txn: escrowTxn }]]);
-      const { txId } = await algodClient.sendRawTransaction(signedTxn).do();
-
-      setTxProgress({
-        step: 3,
-        totalSteps: 4,
-        message: 'Submitting swap offer...'
-      });
-
-      // Create the offer in the service
-      const newOffer = await swapService.createOffer({
-        ...offer,
-        creator: walletState.address,
-      });
-
-      setTxProgress({
-        step: 4,
-        totalSteps: 4,
-        message: 'Finalizing swap offer...'
-      });
-
-      await algosdk.waitForConfirmation(algodClient, txId, 4);
-      notify.success('Swap offer created successfully!');
-      return newOffer;
-    } catch (error) {
-      console.error('Swap creation error:', error);
-      notify.error('Failed to create swap offer');
-      throw error;
-    } finally {
-      setTxProgress({
-        step: 0,
-        totalSteps: 4,
-        message: ''
-      });
-    }
-  };
-
-  const acceptSwapOffer = async (offerId: string) => {
-    if (!walletState.address) {
-      notify.warning('Please connect your wallet first');
-      return;
-    }
-
-    const offer = swapOffers.find(o => o.id === offerId);
-    if (!offer) {
-      throw new Error('Swap offer not found');
-    }
-
-    try {
-      await swapService.acceptOffer(walletState.address, offer);
-      await fetchSwapOffers(); // Refresh the list
-      notify.success('Swap completed successfully');
-    } catch (error) {
-      console.error('Failed to accept swap:', error);
-      notify.error('Failed to accept swap offer');
-    }
-  };
-
-  const handleCreateSwap = async (offer: Omit<SwapOffer, 'id' | 'status' | 'createdAt'>) => {
-    try {
-      await createSwapOffer(offer);
-      await fetchSwapOffers(); // Refresh the list
-      notify.success('Swap offer created successfully');
-    } catch (error) {
-      console.error('Failed to create swap:', error);
-      notify.error('Failed to create swap offer');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-white">
       <Toaster position="top-right" />
@@ -498,18 +356,6 @@ function App() {
               <DonationCard onDonate={handleDonation} network={walletState.network} />
             </div>
 
-            {/* Add Swap Section */}
-            <div className="space-y-8 mb-12">
-              <SwapCreate
-                assets={assets}
-                onCreateSwap={handleCreateSwap}
-              />
-              <SwapList
-                offers={swapOffers}
-                onAcceptSwap={acceptSwapOffer}
-              />
-            </div>
-
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-8">Verified Assets</h2>
               {loading ? (
@@ -546,7 +392,7 @@ function App() {
           </>
         ) : (
           <div className="text-center py-12">
-            <p className="text-gray-600">Connect your wallet to view assets and create swaps.</p>
+            <p className="text-gray-600">Connect your wallet to view verified assets.</p>
           </div>
         )}
       </main>

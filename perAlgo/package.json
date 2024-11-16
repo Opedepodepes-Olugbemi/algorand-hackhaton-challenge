@@ -15,12 +15,18 @@
     "algosdk": "^2.7.0",
     "buffer": "^6.0.3",
     "lucide-react": "^0.344.0",
+    "mongodb": "^6.10.0",
+    "mongoose": "^8.8.1",
     "pera-challenge": "file:",
+    "process": "^0.11.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
   },
   "devDependencies": {
+    "@types/mongoose": "^5.11.97",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",

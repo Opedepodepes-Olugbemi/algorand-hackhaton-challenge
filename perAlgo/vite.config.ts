@@ -1,19 +1,20 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  define: {
-    global: 'globalThis',
-    'process.env': process.env,
-  },
   resolve: {
     alias: {
       process: 'process/browser',
-      stream: 'stream-browserify',
-      util: 'util',
       buffer: 'buffer',
-    },
+      util: 'util',
+      stream: 'stream-browserify'
+    }
+  },
+  define: {
+    'process.env': {},
+    global: 'globalThis',
   },
   optimizeDeps: {
     esbuildOptions: {
